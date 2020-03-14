@@ -1,0 +1,479 @@
+
+---
+title: "satRdays: TDA"
+subtitle: 'A small showcase of the mapper algorithm'
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+tags: [TDA, mapper]
+author: 
+  - Linda de Cave^[Knowledge Lab AG, linda.decave@k-lab.ch]
+  - Marco Wirthlin^[Knowledge Lab AG, marco.wirthlin@k-lab.ch]
+output:
+  html_document:
+    theme: cosmo
+    toc: no
+
+bibliography: bibfile.bib
+---
+
+```{r setup, echo=FALSE , message=FALSE, warnings = TRUE, comment=NA}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 8,
+	fig.width = 12,
+	message = FALSE,
+	warning = FALSE,
+	comment = NA,
+	dev = "png",
+	dpi=200
+)
+
+set.seed(1729)
+ggplot2::theme_set(ggplot2::theme_bw(base_size = 12))
+Sys.setenv(TZ='CET')
+knitr::opts_knit$set(root.dir = normalizePath("./"))
+```
+
+This is a tutorial-style walkthough on how to employ the mapper algorithm introduced by [@singh2007topological] ([link](https://research.math.osu.edu/tgda/mapperPBG.pdf)) and implemented via the [`TDAmapper`](https://github.com/paultpearson/TDAmapper) package by [Adam Pritchard](https://crypti.cc/). This guide should make it possible to apply topological data analysis in your respective field. To help you get started, the source code can be found [here](https://github.com/Seneketh/satRdays_TDA). 
+
+The current document is a how-to for the following:
+
+* Creating lenses in order to project your data into lower dimensions
+* Running the mapper-procedure, choosing the parameters in a principled way
+* Linking the data to the mapper output, relating the nodes directly to observations
+* Linking the data and mapper output to visualisations (for creating data layers for the network visualization)
+* Creating interactive, cross-linked visualizations via `plotly`, `ggnetwork` and `ggplot`
+
+## What is TDA? 
+
+TDA is a yet little-known data science tool that allows to effectively work with high-dimensional data. In TDA, data is considered as a mathematical object and the aim is to characterize the shape of this object using tools adopted from the subfield of Mathematics called Topology. 
+
+## How to use it?
+
+TDA is able to render high dimensional data in a more comprehensible from by, e.g., representing data as a topological network. Those networks provide an insightful segmentation of the data that, in turn, offers the opportunity to identify relevant topological features. These topological attributes can then be used to guide the further development and tunining of other Machine Learning models. Naturally, TDA lends itelf to data exploration in order to gain a deeper understanding of a phenomenon of interest.
+
+## The steps of the mapper algorithm: 
+
+1. Project a high dimensional data set through functions, called lenses, into a lower dimensional space.
+
+2. Cover this projection with overlapping hypercubes (n-dimensional analogue of a square in 2-dimensions).
+
+3. Cluster the points in the original higher dimensional feature space hypercube by hypercube, i.e., hypercube by hypercube, cluster the inverse image (through the lenses) of the hypercube in the lower dimensional space.
+
+4. The clusters become nodes of a graph.
+
+5. Due to the overlap, a single point can appear in multiple nodes, when this happens, then there will be drawn an edge between these nodes.
+
+## The packages
+
+The packages used in this guide are following:
+
+```{r message=FALSE}
+library(tidyverse) #For data manipulation
+library(magrittr) #Pipe semantics (%>%)
+library(network) #Tools to create and modify network objects. 
+library(ggplot2) #A system for 'declaratively' creating graphics, based on "The Grammar of Graphics"
+library(ggnetwork) #Allows to pass network objects to ggplot2 and provides geometries to plot their elements
+library(kableExtra) #Build complex HTML or 'LaTeX' tables using 'kable()' from 'knitr'
+library(plotly) #Plotly is R package for creating interactive web-based graphs
+library(networkD3) #Creates 'D3' 'JavaScript' network, tree, dendrogram, and Sankey graphs from 'R'.
+library(solitude) #Implements Isolation forest, an anomaly detection method (for the lens example)
+library(dbscan) #Density-based spatial clustering of applications with noise
+```
+
+## The data set
+
+The data set used in the current example can be downloaded from Kaggle: [here](https://www.kaggle.com/uciml/breast-cancer-wisconsin-data). The description of the data set from Kaggle is following:
+
+```
+1) ID number
+2) Diagnosis (M = malignant, B = benign)
+
+Ten real-valued features are computed for each cell nucleus:
+
+a) radius (mean of distances from center to points on the perimeter)
+b) texture (standard deviation of gray-scale values)
+c) perimeter
+d) area
+e) smoothness (local variation in radius lengths)
+f) compactness (perimeter^2 / area - 1.0)
+g) concavity (severity of concave portions of the contour)
+h) concave points (number of concave portions of the contour)
+i) symmetry
+j) fractal dimension ("coastline approximation" - 1)
+
+The mean, standard error and "worst" or largest (mean of the three largest values) of these features were computed for each image, resulting in 30 features. For instance, field 3 is Mean Radius, field 13 is Radius SE, field 23 is Worst Radius. All feature values are recoded with four significant digits. Class distribution: 357 benign ("B"), 212 malignant ("M"). There is no missing data.
+```
+### Reading-in and preprocessing:
+
+```{r echo=TRUE}
+
+df <- readr::read_csv("data.csv") #read in
+
+Y <- df %>% mutate(diagnosis = ifelse(diagnosis == "M", 1, 0)) %>% 
+  pull(diagnosis) #recoding target value "diagnosis"
+
+X <- df %>% select(-c("id", "diagnosis")) %>% 
+  mutate_all(., replace_na, replace = 0) %>% 
+  mutate_all(., scale, center=FALSE) #isolating base features of the data set and scaling
+```
+
+The data set looks like follows:
+
+```{r echo=FALSE}
+kable(df) %>%
+  kable_styling("striped", full_width = F) %>%
+  kable_styling() %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+
+## Creating Lenses
+
+Choosing the appropriate lens or lenses for the projection of the data set is a exploratory task and has to be accompanied considering domain knowledge. In short, lenses characterize each observation. An simple example would be the mean of all the features for each observation in the data set. A more sophisticated approach can be computing an outlier score for each observation. Below, three examples of lenses. Because the current tutorial is agnostic of the data set's domain (cancer research), we are free to arbitrarily construct lenses of our choice. Below are two lenses which differently describe the features in terms of how anomalous each observation is (outlier detection). Once with the package `solitude` and the other with `dbscan`.  
+
+### Example Lens 1: Isolation forest
+
+Below we compute a outlier score for each observation via the the `isolationForest` function from the `solitude` package. Again, a domain expert might choose another way of describing each observation (row) of the data. If done correctly, the result should be a vector with as many elements as the data sets has rows. See below:
+
+```{r kde, echo=TRUE}
+scale_zero_to_one <- function(vector){
+
+  a <- vector - min(vector)
+  b <- max(vector) - min(vector)
+
+  return(a/b)
+}
+
+# Create a 1-D lens with Isolation Forest:
+
+model <- solitude::isolationForest$new(num_trees = 2500, mtry = 20) #initialize 
+model$fit(X) #fit the model to the scaled data set
+lens1 <- model$scores$anomaly_score %>% scale_zero_to_one() #extract anomaly score and scale: zero to one.
+```
+
+### Example Lens 2: Hdbscan outlier score
+
+In this second example, a similar measurement is constructed:
+
+```{r norm}
+
+# Create a 1-D lens with hdbscan:
+
+cl <- dbscan::hdbscan(X, minPts = 5)
+lens2 <- cl$outlier_scores
+
+#combine the two lenses in one matrix:
+
+lens <- cbind(lens1, lens2)
+```
+
+A third example (not used in tutorial), could be the L2-norm. The lens could be crafted as follows:
+
+```
+lens3 <- df %>%
+  select(-diagnosis) %>%
+  group_nest(id) %>% #nest for application of the norm on each observation 
+  mutate(data = map(data, ~norm(as.matrix(.x), type = "2"))) %>% #calculate the L2-norm
+  unnest(data) %>%
+  pull(data) %>% 
+  scale_zero_to_one()
+```
+
+The lenses used in our tutorial look as follows:
+
+
+```{r}
+kable(as_tibble(lens)) %>%
+  kable_styling("striped", full_width = F) %>%
+  kable_styling() %>%
+  scroll_box(height = "200px")
+```
+
+
+When plotting the relationship between both lenses and coloring the points according to the target variable (1 means cancer, 0 means healthy), we observe that most data points lie on the diagonal corridor. This is unsurprising as both lenses describe a similar aspect of the observations (outlier score). When identifying the cancer cases, they tend to be localized at higher values of both lenses. Identification or isolation of the phenomenon of interest at this level is NOT required for the Mapper to work correctly. In other words, the healthy and cancer cases could be mixed in a big blob. The goal is not to identify the cancer cases with just two dimensions, but to create the space where meaningful topological features are uncovered.
+
+
+```{r echo=FALSE}
+tibble(lens[,1], lens[,2], Y) %>% ggplot(aes(x=lens1, y=lens2, color=as.factor(Y))) + geom_point() 
+```
+
+
+## Applying the mapper algorithm
+
+As we choose to use two lenses, our 30-dimensional data set will be projected into a two dimensional space. The arguments of the `mapper()` function are not intuitive. Please consider that many different visualizations can be obtained by varying those arguments. It is benefitial to understand what aspects of the algorithm are governed and how the visualization afterwards will be affected. Below a short description of each argument: 
+
+* **dist_object**: A matrix containing distance information between observations (rows) of the data.
+
+* **filter_values**: Here the chosen lenses are supplied to the mapper function (either one or two lenses).
+
+* **num_intervals**: The more intervals, the more granularity for producing covers. 10 by 10 intervals will produce a cover of 100 "squares" in two dimensions. This will lead to more nodes in the end. The clustering will be applied to each element (here, the resutling squares) of the pullback image of the cover. The clusters are the nodes of the graph. This is why the mapper is called a local clustering algorithm (guided by the lenses).
+
+* **percent_overlap**: The more percent overlap, the more edges will appear in the network. As the percent overlap increases, also the likelihood of having nodes that share at least one observation increases and each time two nodes have a intersection, an edge will appear in the network. 
+
+* **num_bins_when_clustering**: The amount of clusters per element of the cover. The more clusters are allowed, the more nodes. The clustering algorithm used in the TDAmapper package is {stats::hclust()}.
+
+For a more detailed description of `mapper()` we recommend consulting the original article: [@singh2007topological]. Below an example how to call the function: 
+
+
+```{r mapper, echo=TRUE}
+
+dist_X <- dist(X) # distance matrix
+
+the_map <- TDAmapper::mapper(
+           dist_object = dist_X,
+           filter_values = list(lens[,1], lens[,2]),
+           num_intervals = c(10 ,10), # 1 value for each lens.
+           percent_overlap = 50,
+           num_bins_when_clustering = 5)
+
+```
+
+## Linking the output from the mapper to the data set
+
+The output of the `mapper()` function is not very user friendly for immediately identifying which observations belong to which nodes of the network. While the `TDAmapper` packages comes with two helper functions which should facilitate this process (`mapperEdges()` and `mapperVertices()`), more transformations are required to fuse the information of the mapper and your data set. Please find code below which accomplishes exactly that:
+
+First, some simple preprocessing:
+
+```{r}
+df %<>% mutate(rows = rownames(.) %>% as.factor()) %>% #create an index column 
+  add_column("iso_forest" = lens1, # add the lens information 
+             "outlier_score" =  lens2)
+
+df_nest <- df %>% 
+  mutate(diagnosis = ifelse(diagnosis == "M", 1, 0)) %>%  #recode the target var (this time here in df)
+  group_nest(rows) # pack all observations into a nested frame (can also just group)
+
+MapperNodes <- TDAmapper::mapperVertices(the_map, df$rows) #just to get amount of nodes
+```
+
+Below, the required transformations to fuse the `mapper` output with the original data set `df`. Note that as there are nodes which share observations, they can appear more than once:
+
+```{r}
+df_nodes <- the_map %>% as.list() %>% 
+  pluck("points_in_vertex") %>% #get the nodes and the obserations they hold from "points_in_vertex"
+  tibble() %>% rename(rows = ".") %>% #cast into a tibble for tidy processing
+  mutate(Nodename = paste0("N", seq(1, length(MapperNodes$Nodename)))) %>% #create node names
+  unnest(rows) %>% #spread node names over rows. now we have a 1 two 1 match between observations and nodes
+  mutate(rows = as.factor(rows)) %>% #cast as factors for compatibility with original data frame
+  left_join(df_nest, ., by="rows") %>% #bind node names via the "row" columns.
+  unnest(data) #not required if previously only grouped.
+```
+
+The result looks following:
+
+```{r echo=FALSE}
+kable(df_nodes) %>%
+  kable_styling("striped", full_width = F) %>%
+  kable_styling() %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+As the nodes are now linked to the observations they contain, the data can be grouped and aggregated for each node. This can be done as easily as this:
+
+```
+df_nodes  %>% group_by(Nodename) %>%
+  summarise_all(mean) %>% #any kind of aggregation transformation can be applied
+  ggplot(aes(x=smoothness_mean, y=outlier_score, color=iso_forest)) + 
+      geom_point()
+```
+
+## Mapper Visualization
+
+To make learning from "topological attributes" possible, the output of `mapper()` has to be represented visually. A static plot of a network is unfortunately insufficient: To derive useful information, one needs to be able to establish a relationship between the visual representation of the networks' nodes and edges and the observations (and their features) contained therein. 
+
+### D3 (not recommended)
+
+The output from the `TDAmapper` packages' helper functions `mapperVertices()` and `mapperEdges()` can be directly used as argument for the 3D plotting library `networkD3`.  The D3 interactive `forceNetwork()` plot below, while offering an interesting *tactile* experience, doesn't offer many opportunities to gain meaningful insights.
+
+Below, see code and plot:
+
+```{r network D3 vis, echo=TRUE}
+
+MapperNodes <- TDAmapper::mapperVertices(the_map, df$rows) #apply helper function to the mapper output
+MapperLinks <- TDAmapper::mapperEdges(the_map) #apply helper function to the mapper output
+
+networkD3::forceNetwork(
+  Nodes = MapperNodes, 
+  Links = MapperLinks, 
+  Source = "Linksource", 
+  Target = "Linktarget",
+  Value = "Linkvalue",
+  NodeID = "Nodename",
+  Nodesize = "Nodesize",
+  Group = "Nodegroup",
+  # legend = "False",
+  charge = -40,
+  height = 1000, # Size of the plot (vertical)
+  width = 1500,  # Size of the plot (horizontal)
+   # linkDistance = networkD3::JS("function(d) { return 10*d.value; }"), 
+  # linkWidth = networkD3::JS("function(d) { return d.value/5; }"),# Function to determine link/edge thickness
+   opacity = 5, # opacity
+    zoom = TRUE) # ability to zoom when click on the node)
+```
+
+
+### network | ggnetwork | ggplot2 | plotly (recommended)
+
+In order to visualize aspects of the data directly on top of the topological network, data, mapper output and visual representation have to be related (linked). The code to achieve this is below:
+
+```{r}
+adja_matrix <- the_map$adjacency #get adjacency of the topological network from the mapper output
+nodes <- the_map$points_in_vertex #get observations contained by each node
+Nodename <- paste0("N", seq(1, length(nodes))) #build the node names from the nodes object 
+#the prefix "N" is arbitrary. Here one can name the nodes as seen fit.
+
+net_df <- network::network(adja_matrix, directed = FALSE, #a network objects is built
+                  vertex.attr = list("Nodename" = Nodename)) %>% #we add our Nodenames to the object
+  ggnetwork::ggnetwork() # the network object is converted to x and y coordinates via the ggnetwork function
+```
+
+This results in the following data frame:
+
+```{r echo=FALSE}
+kable(as_tibble(net_df)) %>%
+  kable_styling("striped", full_width = F) %>%
+  kable_styling() %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+Observe how in the data frame above, the columns "Nodename" and "vertex.names" are almost identical. We left both columns in the data frame to check if our "Nodename" vector correcctly identifies the nodes. The columns "x" and "y" determine each nodes' location. The columns "xend" and "yend" define the edges. Note that if a node has several in or out-going edges, its entry in the data frame will be repeated (with the same "x" and "y" coordinates, but different edge coordinates for each new entry).
+
+As we already associated our original data with the nodes in a previous step, it is now trivial to link the plotting information with data and nodes. This is accomplished with the code below:
+
+
+```{r}
+#Before linking both data sets, it is practical to apply any aggregation steps to our original data first:
+mean_dat <- df_nodes %>% #data set containing orignial data and node information
+  group_by(Nodename) %>% summarize_all(mean) #group by the nodes and aggregate each feature (column-wise aggregation)
+
+combined_dat <- left_join(net_df, mean_dat, by="Nodename") #as both sets have the "Nodename" column, a left join does the trick
+```
+
+The above transformations result in the following data frame:
+
+```{r echo=FALSE}
+kable(combined_dat) %>%
+  kable_styling("striped", full_width = F) %>%
+  kable_styling() %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+
+#### Plot summerized information per node
+
+Below, a static ggplot output of the network.
+
+```{r echo=TRUE}
+fig <- ggplot(combined_dat, aes(x = x, y = y, xend = xend, yend = yend, 
+                  text=sprintf("Node: %s<br>Concavity: %s", Nodename, concavity_se))) + #the tooltip for plotly is defined here
+  geom_edges(aes(), color = "grey75") + #edge color, type and size (only color is defined here)
+  geom_nodes(aes(color = diagnosis, size= texture_se )) + #size is usually the amount of conained obs. per node, but can be anything
+  scale_color_gradient(low = "blue", high = "red") +
+  # geom_nodelabel_repel(aes(label = name), box.padding = unit(1, "lines")) + #optional lables for the nodes
+  theme(axis.text = element_blank(), #the "theme" part is just for styling
+        axis.title = element_blank(),
+        panel.background = element_rect(fill = "black"),
+        panel.grid = element_blank())
+fig
+```
+
+And here the interactive version:
+
+```{r}
+plotly::ggplotly(fig, tooltip = "text" , width = 1000, height = 800) %>% #note how the tooltips need to be called "text"
+  highlight(., on = "plotly_selected", off = "plotly_doubleclick")  %>% 
+  subplot() #this here is just used to render the plot correctly in markdown. Can be disregarded elsewhere.
+```
+
+While the second plot offers more options, more is possible. See below.
+
+#### Create interactive groupings and node selections
+
+One might want to group the nodes in the topological network according to a criteria contained in the original data set. This is achieved by calculating the median of a categorical observation *per node* (basically, by choosing the category which is represented the most in each node). Should only numerical data be available, one can bin. An example below: 
+```
+scale_zero_to_one <- function(vector){
+
+  a <- vector - min(vector)
+  b <- max(vector) - min(vector)
+
+  return(a/b)
+}
+```
+```{r}
+combined_dat %<>% mutate(symmetry_group = scale_zero_to_one(symmetry_mean) %>% #scale this feature and add a new column
+                                          cut(.,  c(-0.1, 0.20, 0.40, 0.60, 0.80, 1.01)) ) # apply an arbitraty cut
+levels(combined_dat$symmetry_group) <- c("very low", "low", "medium", "high", "extreme") #name the factors sensibly
+```
+
+#### Plot the groupings:
+
+Interactive plotting truly allows for data exploration. Note all the options that are available to the user:
+
+* grouping of the network nodes
+* values from the data set represented in the tooltip
+* nodesize according to any data set criteria
+* nodecolor according to any data set criteria
+* edge coloring and linetypes
+* and possibly others (let us know!)
+
+See below the plotting code and plot:
+
+```{r}
+d <- plotly::highlight_key(combined_dat, ~symmetry_group) #use "symmetry_group" as criteria to group interactive vis.
+
+p <- ggplot(d, aes(x = x, y = y, xend = xend, yend = yend, #with the segmented data set, build a standard ggplot
+                   text=sprintf("Node: %s<br>Symmetry: %s", Nodename, symmetry_group))) + #adapt the label (can be set to any)
+  geom_edges(aes(), color = "grey75") +
+  geom_nodes(aes(color = diagnosis, size= texture_se )) +
+  scale_color_gradient(low = "blue", high = "red") #other color scales can be used
+
+gg <- ggplotly(p, tooltip = "text", width = 1000, height = 800) %>% #"plotlyfy" the ggplot
+  highlight(., on = "plotly_selected", off = "plotly_doubleclick") %>% #define what mouse-actions do
+  subplot() 
+
+highlight(gg, dynamic = TRUE)#render the plot with the grouping enabled
+
+```
+
+#### Plot linking:
+
+Under the hood, plotly uses the library `crosstalk`. Thanks to this package, actions performed on plots of "higlighted" data frames such as `d`, above, "carry over" to other plots also applied to the same data. This allows for very powerful filtering operations. Consider code and plot below:
+
+```{r echo=TRUE}
+plot_ly(d, #segmented by the "symmetry" bins
+        x = ~diagnosis, #proportion of cancer cases AFTER applying the symmetry grouping (like a filtering step)
+        type = "histogram", #can be almost any type of plot
+        width = 1000, height = 800)
+```
+
+In conclusion, linking data, network and visual representations allows for interactive and flexible explorations of a data set. The TDA mapper algorithm is a flexible tool for understanding high dimensional data.
+
+## Context of the present document
+
+This tutorial has been developed in the context of the R conference "satRday Neuchâtel", held remotly on the 14th of March 2020 (more info [here](https://satrdays.org/)). We thank Adam Xavier, Enrico Chavez, Elise Dupuis Lozeron, Delphine Fontaine, Arben Kqiku, Sina Rüeger and Yves Tillé for organizing the event.
+
+The corresponding talk and this tutorial have been endorsed by:
+
+![k-lab.ch](./logo.png)
+
+### Licence
+
+The code in this case study is copyrighted by Knowledge Lab AG and licensed under the new BSD (3-clause) license:
+
+https://opensource.org/licenses/BSD-3-Clause
+
+The text and figures in this tutorial (if any) are copyrighted by Knowledge Lab AG and licensed under the CC BY-NC 4.0 license:
+
+https://creativecommons.org/licenses/by-nc/4.0/
+
+
+
+# Session info:
+
+```{r echo=FALSE}
+sessionInfo() 
+```
+
+
+# Bibliography
