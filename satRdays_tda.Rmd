@@ -41,24 +41,24 @@ The current document is a how-to for the following:
 * Creating lenses in order to project your data into lower dimensions
 * Running the mapper-procedure, choosing the parameters in a principled way
 * Linking the data to the mapper output, relating the nodes directly to observations
-* Linking the data and mapper output to visualisations (for creating data layers for the network visualization)
+* Linking the data and mapper output to visualizations (for creating data layers for the network visualization)
 * Creating interactive, cross-linked visualizations via `plotly`, `ggnetwork` and `ggplot`
 
 ## What is TDA? 
 
-TDA is a yet little-known data science tool that allows to effectively work with high-dimensional data. In TDA, data is considered as a mathematical object and the aim is to characterize the shape of this object using tools adopted from the subfield of Mathematics called Topology. 
+TDA is a yet little-known data science tool that allows to effectively work with high-dimensional data. In TDA, data is considered as a mathematical object and the aim is to characterize the shape of this object using tools adopted from the sub-field of Mathematics called Topology. 
 
 ## How to use it?
 
-TDA is able to render high dimensional data in a more comprehensible from by, e.g., representing data as a topological network. Those networks provide an insightful segmentation of the data that, in turn, offers the opportunity to identify relevant topological features. These topological attributes can then be used to guide the further development and tunining of other Machine Learning models. Naturally, TDA lends itelf to data exploration in order to gain a deeper understanding of a phenomenon of interest.
+TDA is able to render high dimensional data in a more comprehensible from by, e.g., representing data as a topological network. Those networks provide an insightful segmentation of the data that, in turn, offers the opportunity to identify relevant topological features. These topological attributes can then be used to guide the further development and tuning of other Machine Learning models. Naturally, TDA lends itself to data exploration in order to gain a deeper understanding of a phenomenon of interest.
 
 ## The steps of the mapper algorithm: 
 
 1. Project a high dimensional data set through functions, called lenses, into a lower dimensional space.
 
-2. Cover this projection with overlapping hypercubes (n-dimensional analogue of a square in 2-dimensions).
+2. Cover this projection with overlapping hyper-cubes (n-dimensional analogue of a square in 2-dimensions).
 
-3. Cluster the points in the original higher dimensional feature space hypercube by hypercube, i.e., hypercube by hypercube, cluster the inverse image (through the lenses) of the hypercube in the lower dimensional space.
+3. Cluster the points in the original higher dimensional feature space hyper-cube by hyper-cube, i.e., hyper-cube by hyper-cube, cluster the inverse image (through the lenses) of the hyper-cube in the lower dimensional space.
 
 4. The clusters become nodes of a graph.
 
@@ -201,13 +201,13 @@ tibble(lens[,1], lens[,2], Y) %>% ggplot(aes(x=lens1, y=lens2, color=as.factor(Y
 
 ## Applying the mapper algorithm
 
-As we choose to use two lenses, our 30-dimensional data set will be projected into a two dimensional space. The arguments of the `mapper()` function are not intuitive. Please consider that many different visualizations can be obtained by varying those arguments. It is benefitial to understand what aspects of the algorithm are governed and how the visualization afterwards will be affected. Below a short description of each argument: 
+As we choose to use two lenses, our 30-dimensional data set will be projected into a two dimensional space. The arguments of the `mapper()` function are not intuitive. Please consider that many different visualizations can be obtained by varying those arguments. It is beneficial to understand what aspects of the algorithm are governed and how the visualization afterwards will be affected. Below a short description of each argument: 
 
 * **dist_object**: A matrix containing distance information between observations (rows) of the data.
 
 * **filter_values**: Here the chosen lenses are supplied to the mapper function (either one or two lenses).
 
-* **num_intervals**: The more intervals, the more granularity for producing covers. 10 by 10 intervals will produce a cover of 100 "squares" in two dimensions. This will lead to more nodes in the end. The clustering will be applied to each element (here, the resutling squares) of the pullback image of the cover. The clusters are the nodes of the graph. This is why the mapper is called a local clustering algorithm (guided by the lenses).
+* **num_intervals**: The more intervals, the more granularity for producing covers. 10 by 10 intervals will produce a cover of 100 "squares" in two dimensions. This will lead to more nodes in the end. The clustering will be applied to each element (here, the resulting squares) of the pullback image of the cover. The clusters are the nodes of the graph. This is why the mapper is called a local clustering algorithm (guided by the lenses).
 
 * **percent_overlap**: The more percent overlap, the more edges will appear in the network. As the percent overlap increases, also the likelihood of having nodes that share at least one observation increases and each time two nodes have a intersection, an edge will appear in the network. 
 
@@ -337,7 +337,7 @@ kable(as_tibble(net_df)) %>%
   scroll_box(width = "100%", height = "500px")
 ```
 
-Observe how in the data frame above, the columns "Nodename" and "vertex.names" are almost identical. We left both columns in the data frame to check if our "Nodename" vector correcctly identifies the nodes. The columns "x" and "y" determine each nodes' location. The columns "xend" and "yend" define the edges. Note that if a node has several in or out-going edges, its entry in the data frame will be repeated (with the same "x" and "y" coordinates, but different edge coordinates for each new entry).
+Observe how in the data frame above, the columns "Nodename" and "vertex.names" are almost identical. We left both columns in the data frame to check if our "Nodename" vector correctly identifies the nodes. The columns "x" and "y" determine each nodes' location. The columns "xend" and "yend" define the edges. Note that if a node has several in or out-going edges, its entry in the data frame will be repeated (with the same "x" and "y" coordinates, but different edge coordinates for each new entry).
 
 As we already associated our original data with the nodes in a previous step, it is now trivial to link the plotting information with data and nodes. This is accomplished with the code below:
 
@@ -360,7 +360,7 @@ kable(combined_dat) %>%
 ```
 
 
-#### Plot summerized information per node
+#### Plot summarized information per node
 
 Below, a static ggplot output of the network.
 
@@ -411,10 +411,10 @@ levels(combined_dat$symmetry_group) <- c("very low", "low", "medium", "high", "e
 Interactive plotting truly allows for data exploration. Note all the options that are available to the user:
 
 * grouping of the network nodes
-* values from the data set represented in the tooltip
-* nodesize according to any data set criteria
-* nodecolor according to any data set criteria
-* edge coloring and linetypes
+* values from the data set represented in the tool-tip
+* node size according to any data set criteria
+* node color according to any data set criteria
+* edge coloring and line types
 * and possibly others (let us know!)
 
 See below the plotting code and plot:
@@ -438,7 +438,7 @@ highlight(gg, dynamic = TRUE)#render the plot with the grouping enabled
 
 #### Plot linking:
 
-Under the hood, plotly uses the library `crosstalk`. Thanks to this package, actions performed on plots of "higlighted" data frames such as `d`, above, "carry over" to other plots also applied to the same data. This allows for very powerful filtering operations. Consider code and plot below:
+Under the hood, plotly uses the library `crosstalk`. Thanks to this package, actions performed on plots of "highlighted" data frames such as `d`, above, "carry over" to other plots, applied to the same data. This allows for very powerful filtering operations. Consider code and plot below:
 
 ```{r echo=TRUE}
 plot_ly(d, #segmented by the "symmetry" bins
@@ -447,11 +447,11 @@ plot_ly(d, #segmented by the "symmetry" bins
         width = 1000, height = 800)
 ```
 
-In conclusion, linking data, network and visual representations allows for interactive and flexible explorations of a data set. The TDA mapper algorithm is a flexible tool for understanding high dimensional data.
+Note that when working in R Studio on a R Markdown file, the linking between the plots will not show. Only once the document is rendered as HTML the linking will take effect. The same applies when working on Shiny applications. In conclusion, linking data, network and visual representations allows for interactive and flexible explorations of a data set. The TDA mapper algorithm is a flexible tool for understanding high dimensional data.
 
 ## Context of the present document
 
-This tutorial has been developed in the context of the R conference "satRday Neuchâtel", held remotly on the 14th of March 2020 (more info [here](https://satrdays.org/)). We thank Adam Xavier, Enrico Chavez, Elise Dupuis Lozeron, Delphine Fontaine, Arben Kqiku, Sina Rüeger and Yves Tillé for organizing the event.
+This tutorial has been developed in the context of the R conference "satRday Neuchâtel", held remotely on the 14th of March 2020 (more info [here](https://satrdays.org/)). We thank Adam Xavier, Enrico Chavez, Elise Dupuis Lozeron, Delphine Fontaine, Arben Kqiku, Sina Rüeger and Yves Tillé for organizing the event.
 
 The corresponding talk and this tutorial have been endorsed by:
 
