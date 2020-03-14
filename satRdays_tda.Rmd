@@ -11,8 +11,8 @@ output:
   html_document:
     theme: cosmo
     toc: no
-
-bibliography: bibfile.bib
+    
+  bibliography: bibfile.bib
 ---
 
 ```{r setup, echo=FALSE , message=FALSE, warnings = TRUE, comment=NA}
@@ -74,12 +74,15 @@ library(magrittr) #Pipe semantics (%>%)
 library(network) #Tools to create and modify network objects. 
 library(ggplot2) #A system for 'declaratively' creating graphics, based on "The Grammar of Graphics"
 library(ggnetwork) #Allows to pass network objects to ggplot2 and provides geometries to plot their elements
+library(TDAmapper) #Implements the mapper algorithm
 library(kableExtra) #Build complex HTML or 'LaTeX' tables using 'kable()' from 'knitr'
 library(plotly) #Plotly is R package for creating interactive web-based graphs
 library(networkD3) #Creates 'D3' 'JavaScript' network, tree, dendrogram, and Sankey graphs from 'R'.
 library(solitude) #Implements Isolation forest, an anomaly detection method (for the lens example)
 library(dbscan) #Density-based spatial clustering of applications with noise
 ```
+
+Note that the TDAmapper package has to be installed from github directly else several functions will be missing. The CRAN version is faulty.
 
 ## The data set
 
@@ -108,7 +111,8 @@ The mean, standard error and "worst" or largest (mean of the three largest value
 
 ```{r echo=TRUE}
 
-df <- readr::read_csv("data.csv") #read in
+df <- readr::read_csv("data.csv") %>% #read in
+select(-X33) # needs to be removed because of a trailing comma in the original csv
 
 Y <- df %>% mutate(diagnosis = ifelse(diagnosis == "M", 1, 0)) %>% 
   pull(diagnosis) #recoding target value "diagnosis"
@@ -228,6 +232,7 @@ the_map <- TDAmapper::mapper(
            num_bins_when_clustering = 5)
 
 ```
+
 
 ## Linking the output from the mapper to the data set
 
