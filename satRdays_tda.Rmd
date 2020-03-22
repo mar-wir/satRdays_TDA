@@ -11,8 +11,7 @@ output:
   html_document:
     theme: cosmo
     toc: no
-    
-  bibliography: bibfile.bib
+bibliography: bibfile.bib
 ---
 
 ```{r setup, echo=FALSE , message=FALSE, warnings = TRUE, comment=NA}
@@ -34,9 +33,13 @@ Sys.setenv(TZ='CET')
 knitr::opts_knit$set(root.dir = normalizePath("./"))
 ```
 
-This is a tutorial-style walkthough on how to employ the mapper algorithm introduced by [@singh2007topological] ([link](https://research.math.osu.edu/tgda/mapperPBG.pdf)) and implemented via the [`TDAmapper`](https://github.com/paultpearson/TDAmapper) package by [Adam Pritchard](https://crypti.cc/). This guide should make it possible to apply topological data analysis in your respective field. To help you get started, the source code can be found [here](https://github.com/Seneketh/satRdays_TDA). 
+This is a tutorial-style walkthough on how to employ the mapper algorithm introduced by [@singh2007topological] ([link](https://research.math.osu.edu/tgda/mapperPBG.pdf)) and implemented via the [`TDAmapper`](https://github.com/paultpearson/TDAmapper) package by [Adam Pritchard](https://crypti.cc/). This guide should make it possible to apply topological data analysis in your respective field. To get started, check out following:
 
-The current document is a how-to for the following:
+* the [source code](https://github.com/Seneketh/satRdays_TDA). Here you can also ask questions via "issues".
+* the [recording of the talk, on youtube](https://www.youtube.com/watch?v=mIub79xhWmY)
+* the [slides](https://drive.google.com/file/d/1o8pUM2dAtlh2dAdkCpOw3QfYdkbOC0fR/view?usp=sharing)
+
+This tutorial is a how-to for the following:
 
 * Creating lenses in order to project your data into lower dimensions
 * Running the mapper-procedure, choosing the parameters in a principled way
@@ -66,7 +69,15 @@ TDA is able to render high dimensional data in a more comprehensible from by, e.
 
 ## The packages
 
-The packages used in this guide are following:
+The packages used in this guide and their descriptions are listed below. Install them with: 
+
+```
+install.packages(c("tidyverse", "magrittr", "network", "ggplot2", "ggnetwork", 
+                   "kableExtra", "plotly", "networkD3", "solitude", "dbscan")
+                )
+```
+
+**Note** that the TDAmapper package has to be installed from github directly else several functions will be missing. The CRAN version is faulty. You can do this by calling `devtools::install_github("paultpearson/TDAmapper")`.
 
 ```{r message=FALSE}
 library(tidyverse) #For data manipulation
@@ -82,7 +93,7 @@ library(solitude) #Implements Isolation forest, an anomaly detection method (for
 library(dbscan) #Density-based spatial clustering of applications with noise
 ```
 
-Note that the TDAmapper package has to be installed from github directly else several functions will be missing. The CRAN version is faulty.
+
 
 ## The data set
 
@@ -187,7 +198,7 @@ lens3 <- df %>%
 The lenses used in our tutorial look as follows:
 
 
-```{r}
+```{r echo=FALSE}
 kable(as_tibble(lens)) %>%
   kable_styling("striped", full_width = F) %>%
   kable_styling() %>%
