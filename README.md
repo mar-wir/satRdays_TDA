@@ -4,6 +4,6 @@ Here you can access the source for the tutorial on how to employ the Mapper algo
 
 Check out the associated links below:
 
-* the [tutorial](https://seneketh.github.io/satRdays_TDA/). 
+* the [tutorial](https://mar-wir.github.io/satRdays_TDA/). 
 * the [recording of the talk, on youtube](https://www.youtube.com/watch?v=mIub79xhWmY)
 * the [slides](https://drive.google.com/file/d/1o8pUM2dAtlh2dAdkCpOw3QfYdkbOC0fR/view?usp=sharing)
